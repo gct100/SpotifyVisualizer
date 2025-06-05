@@ -79,16 +79,11 @@
     }
     window.addEventListener('resize', resizeCanvas);
 
-    // Start
     const token = getAccessTokenFromHash();
     if (token) {
       loginButton.style.display = 'none';
       resizeCanvas();
       drawVisualizer();
-      // Here you can optionally fetch current song:
-      // fetch('https://api.spotify.com/v1/me/player/currently-playing', {
-      //   headers: { Authorization: 'Bearer ' + token }
-      // }).then(res => res.json()).then(data => console.log(data));
     } else {
       loginButton.href = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}&show_dialog=true`;
     }
