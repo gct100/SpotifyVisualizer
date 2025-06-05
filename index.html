@@ -3,55 +3,62 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Spotify Visualizer</title>
-  <style>
-    /* Your CSS styles here */
-    body {
-      background: #111;
-      color: #eee;
-      font-family: Arial, sans-serif;
-      text-align: center;
-      margin: 0; padding: 20px;
-    }
-    #visualizer {
-      width: 100%;
-      height: 300px;
-      background: #222;
-      margin-top: 20px;
-    }
-  </style>
+  <title>Chromebook Spotify Visualizer</title>
 </head>
 <body>
   <h1>Spotify Visualizer</h1>
-  
-  <!-- Your visualizer container -->
-  <canvas id="visualizer"></canvas>
-  
-  <script>
-    // Your JavaScript code here
-    const canvas = document.getElementById('visualizer');
-    const ctx = canvas.getContext('2d');
-    
-    // Resize canvas
-    function resize() {
-      canvas.width = window.innerWidth * 0.8;
-      canvas.height = 300;
-    }
-    window.addEventListener('resize', resize);
-    resize();
+  <button id="login-btn">Log in with Spotify</button>
+  <pre id="output"></pre>
 
-    // Example animation
-    let bars = 30;
-    function animate() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      for(let i=0; i < bars; i++) {
-        let height = Math.random() * canvas.height;
-        ctx.fillStyle = `hsl(${i * 12}, 100%, 50%)`;
-        ctx.fillRect(i * (canvas.width / bars), canvas.height - height, (canvas.width / bars) - 5, height);
-      }
-      requestAnimationFrame(animate);
+  <script>
+    const clientId = '8788664160af45f78733ba1a3fdd0918';
+    const redirectUri = 'https://webspotifyvisualizer.netlify.app/';
+    const scopes = 'user-read-currently-playing user-read-playback-state';
+
+    // Parse the access token from URL hash (after redirect)
+    function getTokenFromUrl() {
+      const hash = window.location.hash.substring(1);
+      const params = new URLSearchParams(hash);
+      return params.get('access_token');
     }
-    animate();
+
+    // Spotify login URL
+    function getSpotifyLoginUrl() {
+      return `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}`;
+    }
+
+    const loginBtn = document.getElementById('login-btn');
+    const output = document.getElementById('output');
+
+    loginBtn.onclick = () => {
+      window.location = getSpotifyLoginUrl();
+    };
+
+    async function fetchCurrentTrack(token) {
+      const res = await fetch('https://api.spotify.com/v1/me/player/currently-playing', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (res.status === 204 || res.status > 400) {
+        output.textContent = 'No track currently playing.';
+        return;
+      }
+
+      const data = await res.json();
+      output.textContent = JSON.stringify(data, null, 2);
+      // Here you can parse data and update your visualizer
+    }
+
+    // On page load
+    window.onload = () => {
+      const token = getTokenFromUrl();
+      if (token) {
+        // Clear the token from URL so it's clean
+        window.history.pushState('', document.title, window.location.pathname);
+        loginBtn.style.display = 'none'; // Hide login button
+        fetchCurrentTrack(token);
+      }
+    };
   </script>
 </body>
 </html>
