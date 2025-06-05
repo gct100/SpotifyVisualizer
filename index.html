@@ -2,49 +2,96 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Chromebook Spotify Visualizer</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #000;
+      overflow: hidden;
+      font-family: sans-serif;
+      color: white;
+    }
+    #login {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      padding: 20px 40px;
+      background: #1db954;
+      color: white;
+      border-radius: 12px;
+      font-size: 1.2rem;
+      text-decoration: none;
+    }
+    canvas {
+      display: block;
+    }
+  </style>
 </head>
 <body>
-  <h1>Spotify Visualizer</h1>
-  <button id="login-btn">Log in with Spotify</button>
-  <pre id="output"></pre>
+  <a id="login" href="#">Login to Spotify</a>
+  <canvas id="visualizer"></canvas>
 
   <script>
     const clientId = '8788664160af45f78733ba1a3fdd0918';
     const redirectUri = 'https://webspotifyvisualizer.netlify.app/';
-    const scopes = 'user-read-currently-playing user-read-playback-state';
+    const scopes = 'user-read-playback-state user-read-currently-playing';
 
-    // Parse the access token from URL hash (after redirect)
-    function getTokenFromUrl() {
+    const loginButton = document.getElementById('login');
+    const canvas = document.getElementById('visualizer');
+    const ctx = canvas.getContext('2d');
+
+    function getAccessTokenFromHash() {
       const hash = window.location.hash.substring(1);
       const params = new URLSearchParams(hash);
       return params.get('access_token');
     }
 
-    // Spotify login URL
-   const clientId = "8788664160af45f78733ba1a3fdd0918";
-const redirectUri = "https://webspotifyvisualizer.netlify.app/";
-const scopes = [
-  "user-read-playback-state",
-  "user-read-currently-playing",
-];
-
-const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(
-  redirectUri
-)}&scope=${encodeURIComponent(scopes.join(" "))}&response_type=token&show_dialog=true`;
-
-window.location.href = authUrl;
-    // On page load
-    window.onload = () => {
-      const token = getTokenFromUrl();
-      if (token) {
-        // Clear the token from URL so it's clean
-        window.history.pushState('', document.title, window.location.pathname);
-        loginBtn.style.display = 'none'; // Hide login button
-        fetchCurrentTrack(token);
+    function drawVisualizer() {
+      let bars = 64;
+      let radius = Math.min(canvas.width, canvas.height) / 4;
+      let centerX = canvas.width / 2;
+      let centerY = canvas.height / 2;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#1db954';
+      for (let i = 0; i < bars; i++) {
+        const angle = (Math.PI * 2 / bars) * i;
+        const length = 20 + Math.random() * 100;
+        const x = centerX + Math.cos(angle) * radius;
+        const y = centerY + Math.sin(angle) * radius;
+        const xEnd = centerX + Math.cos(angle) * (radius + length);
+        const yEnd = centerY + Math.sin(angle) * (radius + length);
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(xEnd, yEnd);
+        ctx.strokeStyle = `hsl(${(angle * 180/Math.PI)}, 100%, 50%)`;
+        ctx.lineWidth = 4;
+        ctx.stroke();
       }
-    };
+      requestAnimationFrame(drawVisualizer);
+    }
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    // Start
+    const token = getAccessTokenFromHash();
+    if (token) {
+      loginButton.style.display = 'none';
+      resizeCanvas();
+      drawVisualizer();
+      // Here you can optionally fetch current song:
+      // fetch('https://api.spotify.com/v1/me/player/currently-playing', {
+      //   headers: { Authorization: 'Bearer ' + token }
+      // }).then(res => res.json()).then(data => console.log(data));
+    } else {
+      loginButton.href = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}&show_dialog=true`;
+    }
   </script>
 </body>
 </html>
