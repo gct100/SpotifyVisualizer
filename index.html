@@ -23,32 +23,18 @@
     }
 
     // Spotify login URL
-    function getSpotifyLoginUrl() {
-      return `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}`;
-    }
+   const clientId = "8788664160af45f78733ba1a3fdd0918";
+const redirectUri = "https://webspotifyvisualizer.netlify.app/";
+const scopes = [
+  "user-read-playback-state",
+  "user-read-currently-playing",
+];
 
-    const loginBtn = document.getElementById('login-btn');
-    const output = document.getElementById('output');
+const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(
+  redirectUri
+)}&scope=${encodeURIComponent(scopes.join(" "))}&response_type=token&show_dialog=true`;
 
-    loginBtn.onclick = () => {
-      window.location = getSpotifyLoginUrl();
-    };
-
-    async function fetchCurrentTrack(token) {
-      const res = await fetch('https://api.spotify.com/v1/me/player/currently-playing', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      if (res.status === 204 || res.status > 400) {
-        output.textContent = 'No track currently playing.';
-        return;
-      }
-
-      const data = await res.json();
-      output.textContent = JSON.stringify(data, null, 2);
-      // Here you can parse data and update your visualizer
-    }
-
+window.location.href = authUrl;
     // On page load
     window.onload = () => {
       const token = getTokenFromUrl();
