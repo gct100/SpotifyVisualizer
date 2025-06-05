@@ -1,157 +1,171 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" >
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Chromebook Spotify Visualizer</title>
   <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      background: #000;
-      overflow: hidden;
-      font-family: sans-serif;
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;600&display=swap');
+    body, html {
+      margin: 0; padding: 0; height: 100%;
+      background: linear-gradient(135deg, #121212, #1db954);
+      font-family: 'Poppins', sans-serif;
       color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      overflow: hidden;
     }
     #login {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      padding: 20px 40px;
-      background: #1db954;
+      background-color: #1db954;
+      padding: 15px 40px;
+      border-radius: 25px;
+      font-weight: 600;
+      font-size: 1.3rem;
       color: white;
-      border-radius: 12px;
-      font-size: 1.2rem;
       text-decoration: none;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+      margin-top: 20px;
+    }
+    #login:hover {
+      background-color: #17a54a;
+    }
+    #player {
+      text-align: center;
+      max-width: 360px;
+      margin-top: 40px;
+      user-select: none;
+    }
+    #album-art {
+      width: 320px;
+      height: 320px;
+      border-radius: 24px;
+      box-shadow: 0 10px 40px rgba(29, 185, 84, 0.7);
+      object-fit: cover;
+      margin-bottom: 25px;
+      transition: box-shadow 0.4s ease;
+    }
+    #song-title {
+      font-weight: 600;
+      font-size: 1.6rem;
+      margin: 0 0 10px 0;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+    #artist-name {
+      font-weight: 300;
+      font-size: 1.2rem;
+      margin: 0 0 30px 0;
+      color: #b3b3b3;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      overflow: hidden;
     }
     canvas {
       display: block;
+      margin: 0 auto;
+      border-radius: 24px;
+      box-shadow: 0 10px 30px rgba(29, 185, 84, 0.7);
     }
   </style>
 </head>
 <body>
-  <a id="login" href="#">Login to Spotify</a>
-  <canvas id="visualizer"></canvas>
 
-  <script>
-    const clientId = '8788664160af45f78733ba1a3fdd0918';
-    const redirectUri = 'https://webspotifyvisualizer.netlify.app/';
-    const scopes = 'user-read-playback-state user-read-currently-playing';
+<a id="login" href="#">Login to Spotify</a>
 
-    async function generateCodeVerifier() {
-      const array = new Uint8Array(64);
-      window.crypto.getRandomValues(array);
-      return btoa(String.fromCharCode.apply(null, array))
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=+$/, '');
-    }
+<div id="player" style="display:none;">
+  <img id="album-art" src="" alt="Album Art" />
+  <h1 id="song-title"></h1>
+  <h2 id="artist-name"></h2>
+  <canvas id="visualizer" width="320" height="100"></canvas>
+</div>
 
-    async function sha256(plain) {
-      const encoder = new TextEncoder();
-      const data = encoder.encode(plain);
-      const hash = await crypto.subtle.digest('SHA-256', data);
-      return new Uint8Array(hash);
-    }
+<script>
+  const clientId = '8788664160af45f78733ba1a3fdd0918';
+  const redirectUri = 'https://webspotifyvisualizer.netlify.app/';
+  const scopes = 'user-read-playback-state user-read-currently-playing';
 
-    function base64urlencode(a) {
-      return btoa(String.fromCharCode(...a))
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=+$/, '');
-    }
+  const loginButton = document.getElementById('login');
+  const player = document.getElementById('player');
+  const albumArt = document.getElementById('album-art');
+  const songTitle = document.getElementById('song-title');
+  const artistName = document.getElementById('artist-name');
+  const canvas = document.getElementById('visualizer');
+  const ctx = canvas.getContext('2d');
 
-    async function pkceChallengeFromVerifier(verifier) {
-      const hashed = await sha256(verifier);
-      return base64urlencode(hashed);
-    }
+  let accessToken = null;
+  let animationFrameId;
 
-    async function initiateLogin() {
-      const verifier = await generateCodeVerifier();
-      const challenge = await pkceChallengeFromVerifier(verifier);
-      localStorage.setItem('verifier', verifier);
-      const params = new URLSearchParams({
-        response_type: 'code',
-        client_id: clientId,
-        scope: scopes,
-        redirect_uri: redirectUri,
-        code_challenge_method: 'S256',
-        code_challenge: challenge
+  function getAccessTokenFromHash() {
+    const hash = window.location.hash.substring(1);
+    const params = new URLSearchParams(hash);
+    return params.get('access_token');
+  }
+
+  async function fetchCurrentlyPlaying() {
+    try {
+      const res = await fetch('https://api.spotify.com/v1/me/player/currently-playing', {
+        headers: { Authorization: 'Bearer ' + accessToken }
       });
-      window.location.href = `https://accounts.spotify.com/authorize?${params.toString()}`;
-    }
-
-    async function getAccessToken(code) {
-      const verifier = localStorage.getItem('verifier');
-      const body = new URLSearchParams({
-        client_id: clientId,
-        grant_type: 'authorization_code',
-        code: code,
-        redirect_uri: redirectUri,
-        code_verifier: verifier
-      });
-      const res = await fetch('https://accounts.spotify.com/api/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: body
-      });
-      return res.json();
-    }
-
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get('code');
-
-    if (code) {
-      document.getElementById('login').style.display = 'none';
-      getAccessToken(code).then(data => {
-        if (data.access_token) {
-          history.replaceState(null, '', redirectUri);
-          resizeCanvas();
-          drawVisualizer();
-        } else {
-          console.error('Failed to get access token:', data);
-        }
-      });
-    } else {
-      document.getElementById('login').addEventListener('click', e => {
-        e.preventDefault();
-        initiateLogin();
-      });
-    }
-
-    const canvas = document.getElementById('visualizer');
-    const ctx = canvas.getContext('2d');
-
-    function drawVisualizer() {
-      let bars = 64;
-      let radius = Math.min(canvas.width, canvas.height) / 4;
-      let centerX = canvas.width / 2;
-      let centerY = canvas.height / 2;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = '#1db954';
-      for (let i = 0; i < bars; i++) {
-        const angle = (Math.PI * 2 / bars) * i;
-        const length = 20 + Math.random() * 100;
-        const x = centerX + Math.cos(angle) * radius;
-        const y = centerY + Math.sin(angle) * radius;
-        const xEnd = centerX + Math.cos(angle) * (radius + length);
-        const yEnd = centerY + Math.sin(angle) * (radius + length);
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(xEnd, yEnd);
-        ctx.strokeStyle = `hsl(${(angle * 180/Math.PI)}, 100%, 50%)`;
-        ctx.lineWidth = 4;
-        ctx.stroke();
+      if (res.status === 204 || res.status > 400) {
+        return null; // no song playing or unauthorized
       }
-      requestAnimationFrame(drawVisualizer);
+      const data = await res.json();
+      return data;
+    } catch {
+      return null;
     }
+  }
 
-    function resizeCanvas() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+  function drawVisualizer(barsData) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const bars = barsData.length;
+    const barWidth = canvas.width / bars;
+    for (let i = 0; i < bars; i++) {
+      const height = barsData[i] * canvas.height;
+      const x = i * barWidth;
+      ctx.fillStyle = `hsl(${i * 10}, 90%, 60%)`;
+      ctx.fillRect(x, canvas.height - height, barWidth * 0.7, height);
+      ctx.shadowColor = 'rgba(29,185,84,0.6)';
+      ctx.shadowBlur = 10;
     }
-    window.addEventListener('resize', resizeCanvas);
-  </script>
+  }
+
+  async function update() {
+    const current = await fetchCurrentlyPlaying();
+    if (current && current.item) {
+      albumArt.src = current.item.album.images[0].url;
+      songTitle.textContent = current.item.name;
+      artistName.textContent = current.item.artists.map(a => a.name).join(', ');
+
+      // Simulate audio data with random bars for now
+      const barsData = new Array(32).fill(0).map(() => Math.random());
+      drawVisualizer(barsData);
+    } else {
+      songTitle.textContent = "No song playing";
+      artistName.textContent = "";
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    animationFrameId = requestAnimationFrame(update);
+  }
+
+  function start() {
+    loginButton.style.display = 'none';
+    player.style.display = 'block';
+    update();
+  }
+
+  accessToken = getAccessTokenFromHash();
+
+  if (accessToken) {
+    start();
+  } else {
+    loginButton.href = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}&show_dialog=true`;
+  }
+</script>
+
 </body>
 </html>
